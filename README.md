@@ -4,7 +4,7 @@
 
 1. Pull repo locally.
 
-2. Add your own environment variables in line with environment.py naming.
+2. Add your own environment variables in line with `environment.py` naming.
 
 3. Run `python3 main.py` to pull any new files, push to sql and check for any duplicates.
 
