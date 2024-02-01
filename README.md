@@ -37,4 +37,4 @@ d. List the unique Device Categories by Advertiser.
 
 e. How many duplicate rows were there?
 
-**## NOTE: Ideally would have loved to integrate pyspark into the solution but with my current setup couldn't do so. I reduced dataframes for testing. Have a rough Spark handler file that is not used, just for some free writing coding for my own benefit. **
+## NOTE: Ideally would have loved to integrate pyspark into the solution but with my current setup couldn't do so. I reduced dataframes for testing. Have a rough Spark handler file that is not used, just for some free writing coding for my own benefit. 
