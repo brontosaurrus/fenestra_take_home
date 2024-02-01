@@ -28,10 +28,11 @@ class GCSHandler:
         blob.download_to_filename(destination)
         return destination
 
-    def download_new_objects(self):
-        downloaded_files = os.listdir(self.destination_dir)
+    def download_new_objects(self, handler):
+        #downloaded_files = os.listdir(self.destination_dir)
         objects = self.list_objects()
-        new_objects = [obj for obj in objects if os.path.basename(obj) not in downloaded_files]
+        #new_objects = [obj for obj in objects if os.path.basename(obj) not in downloaded_files]
+        new_objects = [obj for obj in objects if not handler.filename_exists(os.path.basename(obj))]
         new_object_paths = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             future_to_object = {executor.submit(self.download_object, obj): obj for obj in new_objects}
@@ -88,14 +89,20 @@ if __name__ == "__main__":
     
     # -- initialise Google cloud handler and list bucket objcts
     destination_dir = 'downloaded' 
+    handler = SQLHandler(dbname=PSQL_DB, user=PSQL_USER, password=PSQL_PASSWORD, host = PSQL_IP, port = PSQL_PORT)
+    handler.create_table('processed_files', 'sql/processed_files.sql')
     
     gcs_handler = GCSHandler( GCS_PROJECT_ID, GCS_BUCKET_NAME, destination_dir)
     objects = gcs_handler.list_objects()
     print("Objects in the bucket:", objects)
     
-    # -- find new files in bucket 
+    # -- find new files in bucket and add to processed_files schema 
     os.makedirs(destination_dir, exist_ok=True) 
-    new_files = gcs_handler.download_new_objects()
+    new_files = gcs_handler.download_new_objects(handler)
+    for obj_path in new_files:
+        filename = os.path.basename(obj_path)
+        handler.insert_filename( filename)
+    
     
     # -- initialise data processor handler, transform and combine data into df
     new_files = ['imps6.csv.gz','imps0.csv.gz' ,'imps5.csv.gz','imps4.csv.gz','imps3.csv.gz','imps2.csv.gz','imps1.csv.gz'] # this wll be taken from above
@@ -105,8 +112,7 @@ if __name__ == "__main__":
 
     
     # -- de duplication on basis of rank for three columns and timestamp descending
-    handler = SQLHandler(dbname=PSQL_DB, user=PSQL_USER, password=PSQL_PASSWORD, host = PSQL_IP, port = PSQL_PORT)
-    handler.create_table('ad_data', 'table_definition.sql')
+    handler.create_table('ad_data', 'sql/table_definition.sql')
     historic_df = handler.read_table('ad_data')
     concatenated_df = pd.concat([new_df, historic_df], ignore_index=True)
     df_sorted = concatenated_df.sort_values(by=["time"], ascending=False)
@@ -119,7 +125,7 @@ if __name__ == "__main__":
     print(len(deduplicated_df))
     
     # -- use tmp table to only have de duplicated data and swap tables
-    handler.create_table('tmp', 'table_definition.sql')
+    handler.create_table('tmp', 'sql/table_definition.sql')
     handler.write_table_chunksize(deduplicated_df, 'tmp', 1000)
     handler.execute_query('ALTER TABLE ad_data RENAME TO tmp_table')
     handler.execute_query('ALTER TABLE tmp RENAME TO ad_data')
