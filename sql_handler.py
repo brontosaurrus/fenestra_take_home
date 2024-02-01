@@ -99,5 +99,22 @@ class SQLHandler:
             print("Error inserting filename:", e)
             conn.rollback()
             return False
+        
+    
+    def execute_sql_file(self, file_path):
+        conn = psycopg2.connect(dbname=self.dbname, user=self.user, password=self.password, host=self.host, port=self.port)
+        try:
+            cursor = conn.cursor()
+            with open(file_path, 'r') as file:
+                query = file.read()
+            cursor.execute(query)
+            results = cursor.fetchall()
+            conn.commit()
+            print("SQL commands executed successfully.")
+            return results
+        except psycopg2.Error as e:
+            print("Error executing SQL commands:", e)
+            conn.rollback()
+            return None
 
 
