@@ -23,6 +23,10 @@ A schema has been created in line with the data retrieved from the bucket. The p
 To check for duplicates all current records in the schema are pulled and checked against the new data. They are then pushed back to a 'tmp' table before switching the naming of the tables to the original. A cleanup is then performed. 
 
 **4. Answer the following questions:**
+
+The output of these questions come when running the script. 
+
+
 a. How many records are there per day and per hour?
 
 b. What is the total of the EstimatedBackFillRevenue field per day and per hour
@@ -32,3 +36,5 @@ c. How many records and what is the total of the EstimatedBackFillRevenue field 
 d. List the unique Device Categories by Advertiser.
 
 e. How many duplicate rows were there?
+
+**## NOTE: Ideally would have loved to integrate pyspark into the solution but with my current setup couldn't do so. I reduced dataframes for testing. Have a rough Spark handler file that is not used, just for some free writing coding for my own benefit. **
