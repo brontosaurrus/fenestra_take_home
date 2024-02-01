@@ -30,9 +30,8 @@ class GCSHandler:
         return destination
 
     def download_new_objects(self, handler):
-        #downloaded_files = os.listdir(self.destination_dir)
         objects = self.list_objects()
-        #new_objects = [obj for obj in objects if os.path.basename(obj) not in downloaded_files]
+        # Check if the file has already ben processed by checking the posgresql table created processed_files
         new_objects = [obj for obj in objects if not handler.filename_exists(os.path.basename(obj))]
         new_object_paths = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
@@ -48,12 +47,12 @@ class GCSHandler:
                     print(f"Error downloading object {obj}: {e}")
         return new_object_paths
 
+
 class DataProcessor:
     def __init__(self, directory, new_files):
         self.directory = directory
         self.new_files = new_files
 
-    
     def process_file(self, file_name):
         file_path = os.path.join(self.directory, file_name)
         if file_name.endswith('.csv.gz'):
@@ -69,22 +68,31 @@ class DataProcessor:
             print(f"Invalid file type: {file_name}")
             return None
         if df is not None:
+            # perform transformation of dataframe and dropping uncessesary columns
+            # using a subset of the df for testing
+            df = df.head(1000)
             df['Time'] = pd.to_datetime(df['Time'])
             bool_cols = ['MobileDevice', 'IsCompanion', 'ActiveViewEligibleImpression', 'MobileCapability', 'IsInterstitial', 'Anonymous']
             df[bool_cols] = df[bool_cols].astype(bool)
             df.columns = df.columns.str.lower()
             columns_to_drop = ['domain', 'audiencesegmentids', 'publisherprovidedid']
             df.drop(columns=columns_to_drop, inplace=True)
-            df = df.head(20000)
             return df
         else:
             return None
-
+    
     def process_files(self):
         with Pool() as pool:
+            # pool to process files in parallel 
             dfs = pool.map(self.process_file, self.new_files)
         return [df for df in dfs if df is not None]
-
+        
+    def check_for_duplicates(self,new_df, historic_df):
+        concatenated_df = pd.concat([new_df, historic_df], ignore_index=True)
+        df_sorted = concatenated_df.sort_values(by=["time"], ascending=False)
+        deduplicated_df = df_sorted.drop_duplicates(subset=["orderid", "lineitemid", "keypart"])
+        num_duplicates_dropped = len(df_sorted) - len(deduplicated_df)
+        return deduplicated_df,num_duplicates_dropped
 
 if __name__ == "__main__":
     
@@ -104,26 +112,21 @@ if __name__ == "__main__":
         filename = os.path.basename(obj_path)
         handler.insert_filename( filename)
     
-    
     # -- initialise data processor handler, transform and combine data into df
-    new_files = ['imps6.csv.gz','imps0.csv.gz' ,'imps5.csv.gz','imps4.csv.gz','imps3.csv.gz','imps2.csv.gz','imps1.csv.gz'] # this wll be taken from above
     processor = DataProcessor(destination_dir, new_files)
     dfs = processor.process_files()
-    new_df = pd.concat(dfs, ignore_index=True)
-
+    # check dfs is not empty as there may be no new files pulled
+    if len(dfs) > 0:
+        new_df = pd.concat(dfs, ignore_index=True)
+    else:
+        print("No new files to pull")
+        sys.exit()
     
     # -- de duplication on basis of rank for three columns and timestamp descending
     handler.create_table('ad_data', 'sql/table_definition.sql')
     historic_df = handler.read_table('ad_data')
-    concatenated_df = pd.concat([new_df, historic_df], ignore_index=True)
-    df_sorted = concatenated_df.sort_values(by=["time"], ascending=False)
-    deduplicated_df = df_sorted.drop_duplicates(subset=["orderid", "lineitemid", "keypart"])
-    deduplicated_df.to_csv('output.csv', index=False)
-    
-    # Check the deduplicated DataFrame
-    num_duplicates_dropped = len(df_sorted) - len(deduplicated_df)
+    deduplicated_df,num_duplicates_dropped = processor.check_for_duplicates(new_df, historic_df)
     print("Number of duplicates dropped:", num_duplicates_dropped)
-    print(len(deduplicated_df))
     
     # -- use tmp table to only have de duplicated data and swap tables
     handler.create_table('tmp', 'sql/table_definition.sql')
