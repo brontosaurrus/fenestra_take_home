@@ -2,6 +2,7 @@ import psycopg2
 import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy import text
+from datetime import datetime
 
 class SQLHandler:
     def __init__(self, dbname, user, password, host, port):
@@ -72,4 +73,31 @@ class SQLHandler:
         except Exception as e:
             print("Error writing data to table:", e)
 
-    
+    def filename_exists(self, filename):
+        conn = psycopg2.connect(dbname=self.dbname, user=self.user, password=self.password, host=self.host, port=self.port)
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT EXISTS (SELECT 1 FROM processed_files WHERE filename = %s);", (filename,))
+            result = cursor.fetchone()
+            return result[0]
+        except psycopg2.Error as e:
+            print("Error checking filename:", e)
+            return False
+        
+        
+    def insert_filename(self, filename):
+        conn = psycopg2.connect(dbname=self.dbname, user=self.user, password=self.password, host=self.host, port=self.port)
+        try:
+            cursor = conn.cursor()
+            insert_statement = "INSERT INTO processed_files (filename, processed_at) VALUES (%s, %s);"
+            current_timestamp = datetime.now()
+            cursor.execute(insert_statement, (filename, current_timestamp))
+            conn.commit()
+            print(f"Inserted filename '{filename}' with timestamp '{current_timestamp}' into processed_files table.")
+            return True
+        except psycopg2.Error as e:
+            print("Error inserting filename:", e)
+            conn.rollback()
+            return False
+
+
