@@ -1,6 +1,7 @@
 from sql_handler import SQLHandler
 from environment import DB_URL, GCS_BUCKET_NAME, GCS_PROJECT_ID, PSQL_USER, PSQL_PASSWORD, PSQL_IP, PSQL_PORT, PSQL_DB
 from google.cloud import storage
+import psycopg2
 import gzip
 import csv
 import pandas as pd
@@ -130,11 +131,31 @@ if __name__ == "__main__":
     handler.execute_query('ALTER TABLE ad_data RENAME TO tmp_table')
     handler.execute_query('ALTER TABLE tmp RENAME TO ad_data')
     handler.execute_query('DROP TABLE tmp_table')
-
-     
-    # -- check sql data 
-    df = handler.read_table('ad_data')
-    print(len(df))
+    
+    
+    # -- How many records are there per day and per hour?
+    results = handler.execute_sql_file('sql/query_1.sql')
+    columns = ['day', 'hour', 'record_count']
+    df = pd.DataFrame(results, columns=columns)
+    print(df)
+    
+    # -- b. What is the total of the EstimatedBackFillRevenue field per day and per hour
+    results = handler.execute_sql_file('sql/query_2.sql')
+    columns = ['date', 'hour', 'total_backfill_revenue']
+    df = pd.DataFrame(results, columns=columns)
+    print(df)
+    
+     # -- c. How many records and what is the total of the EstimatedBackFillRevenue field per Buyer?
+    results = handler.execute_sql_file('sql/query_3.sql')
+    columns = ['buyer', 'record_count', 'total_revenue']
+    df = pd.DataFrame(results, columns=columns)
+    print(df)
+    
+     # -- d. List the unique Device Categories by Advertiser.
+    results = handler.execute_sql_file('sql/query_4.sql')
+    columns = ['advertiser', 'device_category']
+    df = pd.DataFrame(results, columns=columns)
+    print(df)
 
 
 
